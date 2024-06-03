@@ -1,0 +1,57 @@
+# Number of runners
+150
+# WC stations per segment
+5
+5
+5
+# Water stations per segment
+20
+20
+20
+# Food stations per segment
+10
+10
+10
+# Water amount per segment
+100
+100
+100
+# Food amount per segment
+100
+100
+100
+# Month to have the marathon (month line + 1)
+44
+# January (average monthly temperature and average monthly precipitation)
+12
+12
+# February
+12
+12
+# March
+12
+12
+# April
+12
+12
+# June
+12
+12
+# July
+12
+12
+# August
+17
+17
+# September
+12
+12
+# October
+12
+12
+# November
+12
+12
+# December
+12
+12
