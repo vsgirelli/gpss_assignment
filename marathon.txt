@@ -1,0 +1,251 @@
+TEMP  EQU 1
+PRECIP  EQU 1
+
+EXPERIMENT MyExperiment() BEGIN
+
+        Open(1,"input1.txt");
+        temperature = Read(1);
+        precipitation = Read(1);
+
+        text = PolyCatenate("WC1500_Water_1000_T",temperature,"_P",precipitation);
+        repetition = 1;
+        WHILE (repetition <= 10) DO BEGIN
+                Open(2,"output.txt");
+
+                exec(temperature,precipitation);
+                repetition = repetition + 1;
+                text = PolyCatenate(text,",",MX$TIMES(1,3));
+        END;
+
+        Write(2,text);
+        Close(2);
+
+END;
+
+
+PROCEDURE exec(temperature,precipitation) BEGIN
+
+        TEMPORARY seed;
+        seed = 17;
+        DoCommand("CLEAR OFF"); /* Clean the structures. */
+
+
+        /* Input */
+        /*TEMP = temperature;
+        PRECIP = precipitation;*/
+        DoCommand(Catenate("TEMP EQU ",temperature));
+        DoCommand(Catenate("PRECIP EQU ",precipitation));
+
+        DoCommand("CLEAR OFF"); /* Clean the structures. */
+
+        DoCommand("START 20000,NP");
+
+END;
+
+
+SIMULATE
+
+
+
+; Biological sex definition
+; WOMEN 1
+; MEN 0
+
+
+; OUTPUT TIMES
+TIMES   MATRIX,1,3
+
+RUNNERS   EQU 20000
+
+
+; SERVICE STATION MULTIPLE SERVER DEFINITION
+WC1       STORAGE 1500
+WATER1    STORAGE 1000
+wamount1  EQU 300
+FOOD1     STORAGE 700
+famount1  EQU 300
+
+WC2 STORAGE 1500
+WATER2    STORAGE 1000
+wamount2  EQU 300
+FOOD2     STORAGE 700
+famount2  EQU 300
+
+WC3 STORAGE 1500
+WATER3    STORAGE 1000
+wamount3  EQU 300
+FOOD3     STORAGE 700
+famount3  EQU 300
+
+; FUNCTIONS TO ASSIGN ATTRIBUTES
+AGE_DIST  FUNCTION RN1,C7
+          0,20/0.3,30/0.65,40/0.85,50/0.95,60/0.99,70/1,90
+
+LEVEL_DIST FUNCTION RN1,D5
+          0.1,1/0.35,2/0.65,3/0.8,4/1,5
+
+LEVEL_HYDRATION FUNCTION RN1,C6
+          0,0/0.1,2/0.3,4/0.75,6/0.9,8/1,10
+
+LEVEL_FULL FUNCTION RN1,C6
+          0,0/0.1,2/0.3,4/0.75,6/0.9,8/1,10
+
+; Pace Table to check statistics
+pace_table        TABLE P$PACE,0,1,30
+hydration_table   TABLE P$HYDRATION,0,1,10
+hydration_table2  TABLE P$HYDRATION,0,1,10
+
+; BEGINNING OF SIMULATION
+
+
+                GENERATE ,,0,RUNNERS                                ; generate avg interval time, variance, delay, num of trans, priority
+                MSAVEVALUE TIMES,1,1,C1                             ; saving initial time into times matrix
+
+                ;ASSIGN AGE,(EXPONENTIAL(1,20,20))                  ; age exponentially distributed from 20 yo with mean of 30
+                ASSIGN AGE,FN$AGE_DIST                              ; age exponentially distributed from 20 with mean of 30
+
+                ASSIGN SEX,(DUNIFORM(1,0,1))                        ; randomly generates 0 or 1 for sex
+                ;ASSIGN LEVEL,(NORMAL(1,0,1))
+                ASSIGN LEVEL,FN$LEVEL_DIST
+                ASSIGN HYDRATION,FN$LEVEL_HYDRATION                 ; normally distributed from 1 to 10
+                ASSIGN FULLNESS,FN$LEVEL_FULL                       ; normally distributed from 1 to 10
+                ;TABULATE hydration_table
+
+; RACE SEGMENT 1
+                ASSIGN PACE,( ( -P$LEVEL # 1.3  + P$AGE # 0.5 + TEMP # 0.1 + PRECIP # 0.02 + P$SEX # 0.5)   )
+                ;TABULATE pace_table
+                ADVANCE P$PACE
+
+; Adjusting hydration and fullness level
+                ASSIGN HYDRATION,( P$HYDRATION - TEMP # 0.01 - P$LEVEL # 0.02 )
+                ;TABULATE hydration_table2
+                ASSIGN FULLNESS,(P$FULLNESS - 0.5)
+
+
+                TEST L P$HYDRATION,8,WC_SERVICE1                    ; goes to the bathroom if highly hydrated
+BACK_WC1        TEST G P$HYDRATION,2,WATER_SERVICE1                 ; drinks water if dehydrated
+
+; RACE SEGMENT 2
+BACK_WATER1     ASSIGN PACE,( ( -P$LEVEL # 1.3  + P$AGE # 0.5 + TEMP # 0.1 + PRECIP # 0.02 + P$SEX # 0.5)   )
+                ;TABULATE pace_table
+                ADVANCE P$PACE
+
+; Adjusting  hydration and fullness level
+                ASSIGN HYDRATION,( P$HYDRATION - TEMP # 0.01 - P$LEVEL # 0.2 - 0.7 )
+                ASSIGN FULLNESS,(P$FULLNESS - 0.5)
+
+                TEST L P$HYDRATION,8,WC_SERVICE2                    ; goes to the bathroom if highly hydrated
+BACK_WC2        TEST G P$HYDRATION,2,WATER_SERVICE2                 ; drinks water if dehydrated
+BACK_WATER2     TEST G P$FULLNESS,1,FOOD_SERVICE2                   ; eats if very hungry
+
+
+
+; RACE SEGMENT 3
+BACK_FOOD2      ASSIGN PACE,( ( -P$LEVEL # 1.3  + P$AGE # 0.5 + TEMP # 0.1 + PRECIP # 0.02 + P$SEX # 0.5)   )
+                ;TABULATE pace_table
+                ADVANCE P$PACE
+
+; Adjusting hydration and fullness level
+                ASSIGN HYDRATION,( P$HYDRATION - TEMP # 0.01 - P$LEVEL # 0.2 - 1 )
+                ASSIGN FULLNESS,(P$FULLNESS - 0.5)
+
+                TEST L P$HYDRATION,8,WC_SERVICE3                    ; goes to the bathroom if highly hydrated
+BACK_WC3        TEST G P$HYDRATION,2,WATER_SERVICE3                 ; drinks water if dehydrated
+BACK_WATER3     TEST G P$FULLNESS,1,FOOD_SERVICE3                   ; eats if very hungry
+BACK_FOOD3      MSAVEVALUE TIMES,1,2,C1                             ; save final time
+                MSAVEVALUE TIMES,1,3,(MX$TIMES(1,2)-MX$TIMES(1,1))  ; calculate simulation time
+                TERMINATE 1
+
+
+
+; RESOURCE STATIONS
+WC_SERVICE1     QUEUE WC_QUEUE1
+                ENTER WC1
+                DEPART WC_QUEUE1
+                ADVANCE (20+10#P$SEX),5
+                LEAVE WC1
+                ASSIGN HYDRATION,(P$HYDRATION-5)
+                TRANSFER ,BACK_WC1
+
+WATER_SERVICE1  TEST G wamount1,0,BACK_WATER1
+                SAVEVALUE wamount1-,1
+                QUEUE WATER_QUEUE1
+                ENTER WATER1
+                DEPART WATER_QUEUE1
+                ADVANCE 4,1           ; simplification, instead of changing the pace we just pent more time advancing in water
+                LEAVE WATER1
+                ASSIGN HYDRATION,1
+                TRANSFER ,BACK_WATER1
+
+FOOD_SERVICE1   TEST G famount1,0,BACK_FOOD1
+                SAVEVALUE famount1,1
+                QUEUE FOOD_QUEUE1
+                ENTER FOOD1
+                DEPART FOOD_QUEUE1
+                ADVANCE 4,1           ; simplification, instead of changing the pace we just spent more time advancing in food
+                LEAVE FOOD1
+                ASSIGN FULLNESS,10
+                TRANSFER ,BACK_FOOD1
+
+
+
+; RESOURCE STATIONS 2
+WC_SERVICE2    QUEUE WC_QUEUE2
+               ENTER WC2
+               DEPART WC_QUEUE2
+               ADVANCE (20+10#P$SEX),5
+               LEAVE WC2
+               ASSIGN HYDRATION,(P$HYDRATION-5)
+               TRANSFER ,BACK_WC2
+
+WATER_SERVICE2 TEST G wamount2,0,BACK_WATER2
+               SAVEVALUE wamount2-,1
+               QUEUE WATER_QUEUE2
+               ENTER WATER2
+               DEPART WATER_QUEUE2
+               ADVANCE 4,1           ; simplification, instead of changing the pace we just spent more time advancing in water
+               LEAVE WATER2
+               ASSIGN HYDRATION,10
+               TRANSFER ,BACK_WATER2
+
+FOOD_SERVICE2  TEST G famount2,0,BACK_FOOD2
+               SAVEVALUE famount2,1
+               QUEUE FOOD_QUEUE2
+               ENTER FOOD2
+               DEPART FOOD_QUEUE2
+               ADVANCE 4,1           ; simplification, instead of changing the pace we just spent more time advancing in food
+               LEAVE FOOD2
+               ASSIGN FULLNESS,10
+               TRANSFER ,BACK_FOOD2
+
+
+
+; RESOURCE STATIONS 3
+WC_SERVICE3    QUEUE WC_QUEUE3
+               ENTER WC3
+               DEPART WC_QUEUE3
+               ADVANCE (20+10#P$SEX),5
+               LEAVE WC3
+               ASSIGN HYDRATION,(P$HYDRATION-5)
+               TRANSFER ,BACK_WC3
+
+WATER_SERVICE3 TEST G wamount3,0,BACK_WATER3
+               SAVEVALUE wamount3-,1
+               QUEUE WATER_QUEUE3
+               ENTER WATER3
+               DEPART WATER_QUEUE3
+               ADVANCE 4,1           ; simplification, instead of changing the pace we just spent more time advancing in water
+               LEAVE WATER3
+               ASSIGN HYDRATION,10
+               TRANSFER ,BACK_WATER3
+
+FOOD_SERVICE3  TEST G famount3,0,BACK_FOOD3
+               SAVEVALUE famount3,1
+               QUEUE FOOD_QUEUE3
+               ENTER FOOD3
+               DEPART FOOD_QUEUE3
+               ADVANCE 4,1           ; simplification, instead of changing the pace we just spent more time advancing in food
+               LEAVE FOOD3
+               ASSIGN FULLNESS,10
+               TRANSFER ,BACK_FOOD3
+
